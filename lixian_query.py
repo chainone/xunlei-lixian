@@ -25,9 +25,10 @@ def link_equals(x1, x2):
 
 
 class TaskBase(object):
-	def __init__(self, client, list_tasks):
+	def __init__(self, client, list_tasks, limit=None):
 		self.client = client
-		self.fetch_tasks = list_tasks
+		self.fetch_tasks_unlimited = list_tasks
+		self.limit = limit
 
 		self.queries = []
 
@@ -37,6 +38,13 @@ class TaskBase(object):
 		self.commit_jobs = [[], []]
 
 		self.download_jobs = []
+
+	def fetch_tasks(self):
+		if self.limit:
+			with self.client.attr(limit=self.limit):
+				return self.fetch_tasks_unlimited()
+		else:
+			return self.fetch_tasks_unlimited()
 
 	def register_queries(self, queries):
 		self.queries += queries
@@ -375,12 +383,35 @@ def default_query(options):
 def parse_queries(base, args):
 	return [to_query(base, arg, bt_processors if args.torrent else processors) for arg in args] or [default_query(args)(base)]
 
+def parse_limit(args):
+	limit = args.limit
+	if limit:
+		limit = int(limit)
+	ids = []
+	for x in args:
+		import re
+		if re.match(r'^\d+$', x):
+			ids.append(int(x))
+		elif re.match(r'^(\d+)/', x):
+			ids.append(int(x.split('/')[0]))
+		elif re.match(r'^(\d+)-(\d+)$', x):
+			ids.extend(map(int, x.split('-')))
+		else:
+			return limit
+	if ids and limit:
+		return min(max(ids)+1, limit)
+	elif ids:
+		return max(ids)+1
+	else:
+		return limit
+
 def build_query(client, args):
 	if args.input:
 		import fileinput
 		args._left.extend(line.strip() for line in fileinput.input(args.input) if line.strip())
 	load_default_queries() # IMPORTANT: init default queries
-	base = TaskBase(client, to_list_tasks(client, args))
+	limit = parse_limit(args)
+	base = TaskBase(client, to_list_tasks(client, args), limit)
 	base.register_queries(parse_queries(base, args))
 	return base
 
