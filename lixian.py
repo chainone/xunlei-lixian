@@ -353,6 +353,14 @@ class XunleiClient(object):
 				return True
 		return is_timeout
 
+	def read_verification_code(self):
+		if not self.verification_code_reader:
+			raise NotImplementedError('Verification code required')
+		else:
+			verification_code_url = 'http://verify2.xunlei.com/image?t=MVA&cachetime=%s' % current_timestamp()
+			image = self.urlopen(verification_code_url).read()
+			return self.verification_code_reader(image)
+
 	def login(self, username=None, password=None):
 		username = self.username
 		password = self.password
@@ -373,14 +381,9 @@ class XunleiClient(object):
 		login_page = self.urlopen(check_url).read()
 		verification_code = self.get_cookie('.xunlei.com', 'check_result')[2:].upper()
 		if not verification_code:
-			if not self.verification_code_reader:
-				raise NotImplementedError('Verification code required')
-			else:
-				verification_code_url = 'http://verify2.xunlei.com/image?cachetime=%s' % current_timestamp()
-				image = self.urlopen(verification_code_url).read()
-				verification_code = self.verification_code_reader(image)
-				if verification_code:
-					verification_code = verification_code.upper()
+			verification_code = self.read_verification_code()
+			if verification_code:
+				verification_code = verification_code.upper()
 		assert verification_code
 		password = encypt_password(password)
 		password = md5(password+verification_code)
@@ -675,17 +678,37 @@ class XunleiClient(object):
 			data['cid[%d]' % i] = ''
 			data['url[%d]' % i] = urllib.quote(to_utf_8(urls[i])) # fix per request #98
 		data['batch_old_taskid'] = batch_old_taskid
+		data['verify_code'] = ''
 		response = self.urlread(url, data=data)
-		assert_response(response, jsonp, len(urls))
+
+		code = get_response_code(response, jsonp)
+		while code == -12 or code == -11:
+			verification_code = self.read_verification_code()
+			assert verification_code
+			data['verify_code'] = verification_code
+			response = self.urlread(url, data=data)
+			code = get_response_code(response, jsonp)
+		if code == len(urls):
+			return
+		else:
+			assert code == len(urls), 'invalid response code: %s' % code
+
+	def commit_torrent_task(self, data):
+		jsonp = 'jsonp%s' % current_timestamp()
+		commit_url = 'http://dynamic.cloud.vip.xunlei.com/interface/bt_task_commit?callback=%s' % jsonp
+		response = self.urlread(commit_url, data=data)
+		code = get_response_code(response, jsonp)['progress']
+		while code == -12 or code == -11:
+			verification_code = self.read_verification_code()
+			assert verification_code
+			data['verify_code'] = verification_code
+			response = self.urlread(commit_url, data=data)
+			code = get_response_code(response, jsonp)['progress']
 
 	def add_torrent_task_by_content(self, content, path='attachment.torrent'):
 		assert re.match(r'd\d+:', content), 'Probably not a valid content file [%s...]' % repr(content[:17])
 		upload_url = 'http://dynamic.cloud.vip.xunlei.com/interface/torrent_upload'
-		jsonp = 'jsonp%s' % current_timestamp()
-		commit_url = 'http://dynamic.cloud.vip.xunlei.com/interface/bt_task_commit?callback=%s' % jsonp
-
 		content_type, body = encode_multipart_formdata([], [('filepath', path, content)])
-
 		response = self.urlread(upload_url, data=body, headers={'Content-Type': content_type}).decode('utf-8')
 
 		upload_success = re.search(r'<script>document\.domain="xunlei\.com";var btResult =(\{.*\});</script>', response, flags=re.S)
@@ -698,10 +721,7 @@ class XunleiClient(object):
 					'findex':''.join(f['id']+'_' for f in bt['filelist']),
 					'size':''.join(f['subsize']+'_' for f in bt['filelist']),
 					'from':'0'}
-			response = self.urlread(commit_url, data=data)
-			#assert_response(response, jsonp)
-			# skip response check
-			# assert re.match(r'%s\({"id":"\d+","avail_space":"\d+","progress":1}\)' % jsonp, response), repr(response)
+			self.commit_torrent_task(data)
 			return bt_hash
 		already_exists = re.search(r"parent\.edit_bt_list\((\{.*\}),'','0'\)", response, flags=re.S)
 		if already_exists:
@@ -728,7 +748,7 @@ class XunleiClient(object):
 	def add_torrent_task_by_link(self, link, old_task_id=None):
 		url = 'http://dynamic.cloud.vip.xunlei.com/interface/url_query?callback=queryUrl&u=%s&random=%s' % (urllib.quote(link), current_timestamp())
 		response = self.urlread(url)
-		success = re.search(r'queryUrl(\(1,.*\))\s*$', response, flags=re.S)
+		success = re.search(r'queryUrl(\(1,.*\))\s*$', response, flags=re.S) # XXX: sometimes it returns queryUrl(0,...)?
 		if not success:
 			already_exists = re.search(r"queryUrl\(-1,'([^']{40})", response, flags=re.S)
 			if already_exists:
@@ -749,12 +769,7 @@ class XunleiClient(object):
 		if old_task_id:
 			data['o_taskid'] = old_task_id
 			data['o_page'] = 'history'
-		jsonp = 'jsonp%s' % current_timestamp()
-		commit_url = 'http://dynamic.cloud.vip.xunlei.com/interface/bt_task_commit?callback=%s' % jsonp
-		response = self.urlread(commit_url, data=data)
-		#assert_response(response, jsonp)
-		# skip response check
-		# assert re.match(r'%s\({"id":"\d+","avail_space":"\d+","progress":1}\)' % jsonp, response), repr(response)
+		self.commit_torrent_task(data)
 		return cid
 
 	def readd_all_expired_tasks(self):
@@ -989,6 +1004,12 @@ def remove_bom(response):
 def assert_response(response, jsonp, value=1):
 	response = remove_bom(response)
 	assert response == '%s(%s)' % (jsonp, value), repr(response)
+
+def get_response_code(response, jsonp):
+	response = remove_bom(response)
+	m = re.match(r'^%s\((.+)\)$' % jsonp, response)
+	assert m, 'invalid jsonp response: %s' % response
+	return json.loads(m.group(1))
 
 def parse_url_protocol(url):
 	m = re.match(r'([^:]+)://', url)
