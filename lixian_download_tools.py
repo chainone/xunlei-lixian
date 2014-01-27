@@ -101,7 +101,7 @@ class Aria2DownloadTool:
 		resuming = self.resuming
 		dir = os.path.dirname(path)
 		filename = os.path.basename(path)
-		aria2_opts = ['aria2c', '--header=Cookie: gdriveid='+gdriveid, download_url, '--out', filename, '--file-allocation=none', '-s10', '-x10']
+		aria2_opts = ['aria2c', '--header=Cookie: gdriveid='+gdriveid, download_url, '--out', filename, '--file-allocation=none', '-s10', '-x10', '--stream-piece-selector=inorder']
 		if dir:
 			aria2_opts.extend(('--dir', dir))
 		if resuming:
