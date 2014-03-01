@@ -92,6 +92,11 @@ def download_file(client, path, task, options):
 			else:
 				download()
 
+		if path.endswith(".mkv") or path.endswith(".mp4") or path.endswith(".avi"):
+				os.system("subd %s" % path)
+		else:
+			  print "Not a video file, so skip downloading subtitles"
+
 	def download1_checked(client, url, path, size):
 		download = download_tool(client=client, url=url, path=path, size=size, resuming=resuming)
 		checked = 0
