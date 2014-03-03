@@ -1,3 +1,9 @@
+Update:
+    Integrated wit SubD so that once a video file finishes downloading, the corresponding subtitle files will also be downloaded.     
+     
+
+
+
 xunlei-lixian
 =============
 迅雷离线下载脚本。欢迎继续关注[浏览器端的迅雷离线应用](https://github.com/iambus/xunlei-lixian-web)。
