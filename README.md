@@ -1,5 +1,5 @@
 Update:
-    Integrated wit SubD so that once a video file finishes downloading, the corresponding subtitle files will also be downloaded.     
+    Integrated wit HSub(https://github.com/chainone/HSub) so that once a video file finishes downloading, the corresponding subtitle files will also be downloaded.     
      
 
 
