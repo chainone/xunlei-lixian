@@ -93,7 +93,7 @@ def download_file(client, path, task, options):
 				download()
 
 		if path.endswith(".mkv") or path.endswith(".mp4") or path.endswith(".avi"):
-				os.system("subd '%s'" % path)
+				os.system("hsub '%s'" % path)
 		else:
 			  print "Not a video file, so skip downloading subtitles"
 
