@@ -1,5 +1,8 @@
+更新：    
+   这个fork里面包含了跟HSub(https://github.com/chainone/HSub) 的集成，在下载完视频文件后，如果你安装了HSub，会自动去射手网下载字幕并放到视频文件所在的目录下.    
+
 Update:
-    Integrated wit HSub(https://github.com/chainone/HSub) so that once a video file finishes downloading, the corresponding subtitle files will also be downloaded.     
+    Integrated with HSub(https://github.com/chainone/HSub) so that once a video file finishes downloading, the corresponding subtitle files will also be downloaded.     
      
 
 
